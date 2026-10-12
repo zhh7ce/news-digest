@@ -10,6 +10,7 @@ settings:
   #   feed-<本地时间 YYYY-MM-DD-HHMM>.xml / digest-<同样标签>.md = 留档
   #   feed.xml / digest.md = 永远指向最新一份，订阅只用这两个
   # ./scripts/serve.sh 把这个目录对外发成 HTTP 服务（output/debug 里那些 prompt 原文不会发出去）
+  # 容器里跑 news-digest loop 模式（每天 SCHEDULE_TIME 自动一轮，默认 02:00）就是每天多两个留档文件
   outputDir: ./output
   # 缓存目录：digest-state.json 里存两份缓存
   #   items  = 逐条标注结果（中文标题 + 类别），标题没变就不再请求
@@ -67,7 +68,8 @@ llm:
   # 这里只放默认值，环境变量优先。可用的环境变量（全部写进项目根的 .env）：
   # LLM_API_BASE / LLM_API_KEY / LLM_MODEL / LLM_CONCURRENCY / LLM_RETRIES / LLM_RPM / LLM_THINKING
   # LLM_ANNOTATE / LLM_SCORE / SORT_BY / MIN_SCORE / MIN_SOURCES / DIGEST_DUMP
-  # 另有 FEEDS_CONFIG（换一份配置文件）、SERVE_PORT 和 SERVE_HOST（只有 scripts/serve.sh 用）、
+  # 另有 FEEDS_CONFIG（换一份配置文件）、SERVE_PORT 和 SERVE_HOST（只有 src/serve.ts 用）、
+  # SCHEDULE_TIME 和 TZ（只有 src/schedule.ts 的容器定时模式用，见 scripts/docker.sh）、
   # http_proxy / https_proxy / NODE_USE_ENV_PROXY / no_proxy（抓国外源用，NAS 上一般删掉）
   # deepseek-flash = 线上最新的 DeepSeek V4.1 Flash，base_url 用 https://api.deepseek.com
   model: "deepseek-flash"
