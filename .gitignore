@@ -4,5 +4,3 @@ state/
 .env
 mock-output/
 mock-state/
-models/
-*.onnx
