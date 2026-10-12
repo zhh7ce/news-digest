@@ -1,0 +1,17 @@
+node_modules
+output
+state
+mock-output
+mock-state
+.env
+.env.example
+.git
+.gitignore
+tests
+tsconfig.json
+Dockerfile
+scripts/docker.sh
+scripts/update.sh
+scripts/clean.sh
+scripts/serve.sh
+*.md

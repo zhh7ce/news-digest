@@ -1,0 +1,124 @@
+# 沙箱验证配置：只配 tests/mock-llm.mjs 自带的三个假源，输出写到 ./mock-output、缓存在 ./mock-state，
+# 不碰真实的 output/ 和 state/。用 ./tests/test.sh（或 npm test）一键跑。
+settings:
+  maxItemsPerFeed: 30
+  fetchConcurrency: 3
+  outputDir: ./mock-output
+  stateDir: ./mock-state
+  feedTitle: "沙箱假源验证"
+  feedDescription: "mock 验证用，不写真实 output/state"
+  siteBaseUrl: ""
+  mergeBatchSize: 100
+  maxItemsPerCategory: 3
+  summaryMaxChars: 400
+  retentionDays: 7
+
+categories:
+  - id: world
+    name: 世界新闻
+  - id: china
+    name: 国内新闻
+  - id: tech
+    name: 科技前沿
+  - id: hot
+    name: 热门话题
+  - id: other
+    name: 其他
+
+profile: |
+  沙箱验证用的假读者画像。
+
+llm:
+  model: mock
+  temperature: 0
+  concurrency: 4
+  retries: 0
+
+prompts:
+  # 逐条调用：一条新闻一次请求，只要中文标题和类别。缓存命中就不发这一问。
+  # 这一趟同时充当内容风控探针——被拦下的那条用原标题和源声明的类别兜底，不影响其它条目。
+  item: |
+    你是新闻编辑。处理下面这一条新闻候选，输出它的中文标题和类别。
+
+    1. title_zh：一句话简体中文标题。英文标题译成自然中文；去掉网站名、栏目名、"丨""｜""【】"之类的装饰；
+       不要加"重大""令人震惊"这类评价词，只保留事实。
+    2. category：按事件本身的题材归类，只能取冒号左边的英文 id：
+    {{categories}}
+    归类规则：
+    - 发生在中国大陆/港澳台的社会、民生、政事、事故 → china
+    - 中国之外的国际事件 → world
+    - AI、芯片、编程工具、开源项目、科技公司产品发布 → tech
+    - 热搜、榜单、社区讨论、娱乐八卦、体育文娱 → hot
+    - 实在归不进以上四类的 → other
+
+    只返回 JSON，格式：
+    {"title_zh":"","category":"world"}
+
+    新闻候选：
+    {{article}}
+
+  # 批量归并：已有事件当锚点，只判定这一批新条目属于谁。
+  # 锚点编号 a1、a2…，条目编号 1、2…，模型只回编号，真实链接的映射留在代码里。
+  merge: |
+    你是新闻编辑。下面左边是已有的新闻事件（锚点），右边是一批新到的新闻条目。
+    判断每条新条目属于哪一件事，类别范围：{{category}}
+
+    已有事件（编号：标题）：
+    {{anchors}}
+
+    新条目（编号 [来源] 标题）：
+    {{items}}
+
+    规则：
+    1. 每条新条目都要出现在 assignments 里，且只能归一个事件。
+    2. 与某个已有事件是同一件事 → event 原样填那个事件的编号，例如 a7。
+    3. 几条新条目之间是同一件事 → event 填 n- 开头的新事件名，名字用这组里最小的条目编号，例如 n-7。
+    4. 谁都不是同一件事 → event 填 n- 加它自己的条目编号，例如 n-12。
+    5. 只有题材、地点、人物、数字都对得上时才合并。主题相近但不同事件不要合并
+       （不同地点的地震、不同公司的产品发布、不同场次的比赛都是不同事件）。
+    6. 已有事件的编号只能逐字抄上面的列表，不要自己造。
+
+    只返回 JSON，格式：
+    {"assignments":[{"item":"条目编号","event":"事件编号或n-新名"}]}
+
+  # 逐事件打分：合并好的事件一个一次请求，分数只用于排序和每类截断。
+  # 打过分的事件用缓存，不重复问。
+  score: |
+    你是新闻主编，给下面这条已经合并好的新闻打一个重要度分数。
+
+    类别：{{category}}
+    标题：{{title}}
+    独立来源数：{{sources}} 家
+    各媒体报道标题：
+    {{articles}}
+
+    摘要（取自排序第一的来源原文）：
+    {{summary}}
+
+    读者偏好：
+    {{profile}}
+
+    score 取 0 到 10：
+    9-10 = 必须知道的重大事件；7-8 = 重要；4-6 = 值得一看；1-3 = 次要；0 = 噪声（营销软文、榜单复读、没有事实更新）。
+    多家长度一致的报道、涉及人数/金额/技术节点的具体事实，分数往上；纯观点、纯预告、纯花絮，分数往下。
+
+    只返回 JSON，格式：
+    {"score":7.5}
+
+# 源清单：与 digest/feeds.yaml 保持一致（2026-10-12 从那边复制过来）。
+# category 只是 AI 没给出归类时的兜底归属，正常情况由逐条调用决定。
+# 自建 RSSHub（192.168.10.123:1200）的 URL 统一带 ?limit=30：让实例只渲染要用的条数，
+# 否则它默认渲染 100 条逐篇抓原文，冷缓存时一次响应会超时。
+sources:
+  - id: s1
+    name: 甲源
+    url: http://127.0.0.1:8787/feeds/s1.xml
+    category: china
+  - id: s2
+    name: 乙源
+    url: http://127.0.0.1:8787/feeds/s2.xml
+    category: world
+  - id: s3
+    name: 丙源
+    url: http://127.0.0.1:8787/feeds/s3.xml
+    category: tech

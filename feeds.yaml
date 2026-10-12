@@ -1,0 +1,270 @@
+# news-digest 配置：订阅源、运行参数、AI 提示词全部外置于此文件。
+# 全量抓取、增量标注、AI 归并、AI 打分；排序和代表条目的选取都是程序规则。
+
+settings:
+  # 每个源最多取多少条（RSS 架上挂着多少用多少，不按发布时间过滤）
+  maxItemsPerFeed: 30
+  # 抓取并发
+  fetchConcurrency: 10
+  # 输出目录（相对项目根）。每次运行写四份：
+  #   feed-<本地时间 YYYY-MM-DD-HHMM>.xml / digest-<同样标签>.md = 留档
+  #   feed.xml / digest.md = 永远指向最新一份，订阅只用这两个
+  # ./scripts/serve.sh 把这个目录对外发成 HTTP 服务（output/debug 里那些 prompt 原文不会发出去）
+  outputDir: ./output
+  # 缓存目录：digest-state.json 里存两份缓存
+  #   items  = 逐条标注结果（中文标题 + 类别），标题没变就不再请求
+  #   events = 归并好的事件（成员链接 + 类别 + 中文标题 + 分数），打过分的用缓存
+  # 这里存的不是"上榜冷却"，同一条新闻会一直在 feed 里出现，直到各源不再列它。
+  stateDir: ./state
+  # feed 元信息
+  feedTitle: "每日要闻精选"
+  feedDescription: "多源报道优先的每日新闻摘要"
+  # 手机订阅时 feed 内条目链接的站点前缀（可留空，留空则用原始链接）
+  siteBaseUrl: ""
+  # 一次归并请求送多少个条目（按类别切批，批内条目数不超过这个值）
+  mergeBatchSize: 100
+  # 每个类别最多输出多少条
+  maxItemsPerCategory: 20
+  # 必留门槛：命中下面任一条件的事件一定输出，且不占 maxItemsPerCategory 的名额，
+  # 所以一个类别可能超过 20 条。0 = 这个维度不生效。环境变量 MIN_SCORE / MIN_SOURCES 优先。
+  # 关掉打分（LLM_SCORE=0）时所有事件都是 0 分，MIN_SCORE 填任何正数都不会有事件命中。
+  minScore: 0
+  minSources: 0
+  # 摘要保留多少字（页面垃圾清掉之后再截断）
+  summaryMaxChars: 400
+  # 连续这么多天没在任何源架上见到的条目/事件，从缓存里清掉
+  retentionDays: 7
+  # 排序口径（环境变量 SORT_BY 优先）：
+  #   sources = 独立来源数 → AI 分数 → 事件内最新报道时间（多家媒体报道的排前）
+  #   score   = AI 分数 → 独立来源数 → 事件内最新报道时间（按重要度排前）
+  sortBy: sources
+
+# 类别表：id 用于提示词与 JSON 交换，name 是输出里的板块标题；顺序即输出分组顺序。
+# 板块由事件内各条报道的 AI 类别投票决定，平票时跟随代表条目。
+categories:
+  - id: world
+    name: 世界新闻
+  - id: china
+    name: 国内新闻
+  - id: tech
+    name: 科技前沿
+  - id: hot
+    name: 热门话题
+  - id: other
+    name: 其他
+
+# 用户偏好，注入提示词的 {{profile}} 占位符
+profile: |
+  读者最关心三类内容，按优先级：
+  1. 世界范围内的重大事件：战争/军事冲突、重大灾害、政权更迭、重大国际协议或制裁。
+     其中"重大灾害"只看量级：8 级及以上地震，或造成 1000 人及以上死亡（含失踪）的灾害；
+     未达这条线的飓风、洪水、塌方、小火等常规灾害不算重大事件。
+  2. 顶级 AI 进展：头部实验室（OpenAI/Anthropic/Google DeepMind/Meta 等）的模型发布、重要论文、重大产品更新；普通融资新闻、营销软文不算。
+  3. 广泛讨论的热门话题：技术社区和社会热点，值得读者自己去挑一挑的内容。
+  摘要用简体中文撰写；英文标题翻译成自然的中文标题。
+
+llm:
+  # 这里只放默认值，环境变量优先。可用的环境变量（全部写进项目根的 .env）：
+  # LLM_API_BASE / LLM_API_KEY / LLM_MODEL / LLM_CONCURRENCY / LLM_RETRIES / LLM_RPM / LLM_THINKING
+  # LLM_ANNOTATE / LLM_SCORE / SORT_BY / MIN_SCORE / MIN_SOURCES / DIGEST_DUMP
+  # 另有 FEEDS_CONFIG（换一份配置文件）、SERVE_PORT 和 SERVE_HOST（只有 scripts/serve.sh 用）、
+  # http_proxy / https_proxy / NODE_USE_ENV_PROXY / no_proxy（抓国外源用，NAS 上一般删掉）
+  # deepseek-flash = 线上最新的 DeepSeek V4.1 Flash，base_url 用 https://api.deepseek.com
+  model: "deepseek-flash"
+  temperature: 0.2
+  # 混合推理模型（DeepSeek V4.1 Flash、GLM 思考版等）默认会先输出一段思考过程。
+  # 标注、归类、打分这些任务不需要思考链，关掉更省 token 也更快；填 enabled 或删掉这行则交给服务端默认。
+  thinking: disabled
+  # 同时在途的 AI 请求数。现在是逐条 + 逐事件两类小请求，并发决定整轮耗时；
+  # 实际值由 .env 的 LLM_CONCURRENCY 决定（env 优先于这里），遇到成片 429 就往下降。
+  concurrency: 1
+  # 单个请求失败后的重试次数（仅 429 与 5xx 重试，指数退避并遵守 Retry-After）
+  retries: 3
+  # 每分钟最多发多少个 AI 请求，0 表示不限。免费额度按分钟限速时填这个，
+  # 程序会在窗口满了之后等最早那个请求滑出去再发；环境变量 LLM_RPM 优先。
+  rpm: 0
+  # 逐条标注开关。0 = 完全不发这类请求，标题直接用原文、分类用该源在 sources 里声明的 category；
+  # 归并和打分仍照常发。非 0 = 每条（首次见到时）请求一次中文标题 + 类别。环境变量 LLM_ANNOTATE 优先。
+  annotate: 1
+  # 逐事件打分开关。0 = 完全不发这类请求，所有事件记 0 分，排序退化成独立来源数 → 事件最新报道时间（缓存里的旧分数也不用）；
+  # 非 0 = 每个没打过分的事件请求一次 0-10 分。环境变量 LLM_SCORE 优先。
+  score: 1
+
+prompts:
+  # 逐条调用：一条新闻一次请求，只要中文标题和类别。缓存命中就不发这一问。
+  # 这一趟同时充当内容风控探针——被拦下的那条用原标题和源声明的类别兜底，不影响其它条目。
+  item: |
+    你是新闻编辑。处理下面这一条新闻候选，输出它的中文标题和类别。
+
+    1. title_zh：一句话简体中文标题。英文标题译成自然中文；去掉网站名、栏目名、"丨""｜""【】"之类的装饰；
+       不要加"重大""令人震惊"这类评价词，只保留事实。
+    2. category：按事件本身的题材归类，只能取冒号左边的英文 id：
+    {{categories}}
+    归类规则：
+    - 发生在中国大陆/港澳台的社会、民生、政事、事故 → china
+    - 中国之外的国际事件 → world
+    - AI、芯片、编程工具、开源项目、科技公司产品发布 → tech
+    - 热搜、榜单、社区讨论、娱乐八卦、体育文娱 → hot
+    - 实在归不进以上四类的 → other
+
+    只返回 JSON，格式：
+    {"title_zh":"","category":"world"}
+
+    新闻候选：
+    {{article}}
+
+  # 批量归并：已有事件当锚点，只判定这一批新条目属于谁。
+  # 锚点编号 a1、a2…，条目编号 1、2…，模型只回编号，真实链接的映射留在代码里。
+  merge: |
+    你是新闻编辑。下面左边是已有的新闻事件（锚点），右边是一批新到的新闻条目。
+    判断每条新条目属于哪一件事，类别范围：{{category}}
+
+    已有事件（编号：标题）：
+    {{anchors}}
+
+    新条目（编号 [来源] 标题）：
+    {{items}}
+
+    规则：
+    1. 每条新条目都要出现在 assignments 里，且只能归一个事件。
+    2. 与某个已有事件是同一件事 → event 原样填那个事件的编号，例如 a7。
+    3. 几条新条目之间是同一件事 → event 填 n- 开头的新事件名，名字用这组里最小的条目编号，例如 n-7。
+    4. 谁都不是同一件事 → event 填 n- 加它自己的条目编号，例如 n-12。
+    5. 只有题材、地点、人物、数字都对得上时才合并。主题相近但不同事件不要合并
+       （不同地点的地震、不同公司的产品发布、不同场次的比赛都是不同事件）。
+    6. 已有事件的编号只能逐字抄上面的列表，不要自己造。
+
+    只返回 JSON，格式：
+    {"assignments":[{"item":"条目编号","event":"事件编号或n-新名"}]}
+
+  # 逐事件打分：合并好的事件一个一次请求，分数只用于排序和每类截断。
+  # 打过分的事件用缓存，不重复问。
+  score: |
+    你是新闻主编，给下面这条已经合并好的新闻打一个重要度分数。
+
+    类别：{{category}}
+    标题：{{title}}
+    独立来源数：{{sources}} 家
+    各媒体报道标题：
+    {{articles}}
+
+    摘要（取自排序第一的来源原文）：
+    {{summary}}
+
+    读者偏好：
+    {{profile}}
+
+    score 取 0 到 10：
+    9-10 = 必须知道的重大事件；7-8 = 重要；4-6 = 值得一看；1-3 = 次要；0 = 噪声（营销软文、榜单复读、没有事实更新）。
+    多家长度一致的报道、涉及人数/金额/技术节点的具体事实，分数往上；纯观点、纯预告、纯花絮，分数往下。
+
+    只返回 JSON，格式：
+    {"score":7.5}
+
+# 源清单：与 digest/feeds.yaml 保持一致（2026-10-12 从那边复制过来）。
+# category 只是 AI 没给出归类时的兜底归属，正常情况由逐条调用决定。
+# 自建 RSSHub（192.168.10.123:1200）的 URL 统一带 ?limit=30：让实例只渲染要用的条数，
+# 否则它默认渲染 100 条逐篇抓原文，冷缓存时一次响应会超时。
+sources:
+  # ── 国内 ──
+  - id: people-politics
+    name: 人民网时政
+    url: http://192.168.10.123:1200/people/politics?limit=30
+    category: china
+  - id: xinhua-whxw
+    name: 新华社最新播报
+    url: http://192.168.10.123:1200/news/whxw?limit=30
+    category: china
+  - id: chinanews-china
+    name: 中新网国内
+    url: http://www.chinanews.com.cn/rss/china.xml
+    category: china
+  - id: jiemian
+    name: 界面新闻
+    url: https://a.jiemian.com/index.php?m=article&a=rss
+    category: china
+  - id: people-finance
+    name: 人民网财经
+    url: http://192.168.10.123:1200/people/finance?limit=30
+    category: china
+  - id: caixin
+    name: 财新网
+    url: http://192.168.10.123:1200/caixin/latest?limit=30
+    category: china
+  - id: chinanews-scroll
+    name: 中新网滚动
+    url: http://www.chinanews.com.cn/rss/scroll-news.xml
+    category: china
+  # 财联社电报（/cls/telegraph）路由本身可用，但每条的 <link> 是空的、guid 是标题文本，
+  # 拿不到原文链接，也不适合作为去重键，所以不接入。
+  # ── 世界 ──
+  - id: people-world
+    name: 人民网国际
+    url: http://192.168.10.123:1200/people/world?limit=30
+    category: world
+  - id: chinanews-world
+    name: 中新网国际
+    url: http://www.chinanews.com.cn/rss/world.xml
+    category: world
+  - id: cankao
+    name: 参考消息
+    url: http://192.168.10.123:1200/cankaoxiaoxi?limit=30
+    category: world
+  - id: sina-rollnews
+    name: 新浪新闻滚动
+    url: http://192.168.10.123:1200/sina/rollnews?limit=30
+    category: world
+  # ── 科技 ──
+  - id: ithome
+    name: IT之家
+    url: https://www.ithome.com/rss/
+    category: tech
+  - id: qbitai
+    name: 量子位
+    url: https://www.qbitai.com/feed
+    category: tech
+  - id: leiphone
+    name: 雷锋网
+    url: https://www.leiphone.com/feed
+    category: tech
+  - id: infoq-cn
+    name: InfoQ 中文
+    url: https://www.infoq.cn/feed
+    category: tech
+  - id: geekpark
+    name: 极客公园
+    url: https://www.geekpark.net/rss
+    category: tech
+  - id: ifanr
+    name: 爱范儿
+    url: https://ifanr.com/feed
+    category: tech
+  - id: huxiu
+    name: 虎嗅
+    url: http://192.168.10.123:1200/huxiu/article?limit=30
+    category: tech
+  - id: sspai
+    name: 少数派
+    url: https://sspai.com/feed
+    category: tech
+  - id: hn-frontpage
+    name: Hacker News 首页
+    url: https://hnrss.org/frontpage
+    category: tech
+  - id: hn-best
+    name: Hacker News Best
+    url: https://hnrss.org/best
+    category: tech
+  # ── 热门话题 ──
+  - id: zhihu-hot
+    name: 知乎热榜
+    url: http://192.168.10.123:1200/zhihu/hot?limit=30
+    category: hot
+  - id: kr36-hotlist
+    name: 36Kr 热榜
+    url: http://192.168.10.123:1200/36kr/hot-list?limit=30
+    category: hot
+  - id: kr36-newsflashes
+    name: 36氪快讯
+    url: http://192.168.10.123:1200/36kr/newsflashes?limit=30
+    category: hot
