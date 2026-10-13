@@ -15,4 +15,4 @@ scripts/update.sh
 scripts/clean.sh
 scripts/serve.sh
 *.md
-./news-digest.tar
+news-digest.tar
