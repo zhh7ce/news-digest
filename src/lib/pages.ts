@@ -5,6 +5,12 @@ import type { Config, PagesTarget } from "./config.ts";
 /** 上传清单写死：不 readdir(outputDir)，debug 产物永远不出机器 */
 const PUBLISH_FILES = ["feed.xml", "digest.md"] as const;
 
+/** 整体两份 + 每个板块一份 feed，命名规则和 digest.ts 的 writeOutput 对齐 */
+function publishList(config: Config): string[] {
+  return [...PUBLISH_FILES, ...config.categories.map((category) => `feed-${category.id}.xml`)];
+}
+
+
 export interface PublishResult {
   file: string;
   commitSha: string;
@@ -81,6 +87,11 @@ export async function publishFiles(
   const results: PublishResult[] = [];
   // 串行发：Contents API 同一分支并发 PUT 容易撞 409
   for (const name of files) {
+    // 单独跑 publish 时上一轮可能还没有板块 feed，缺的那份跳过而不是让整批发布失败
+    if (!fs.existsSync(path.join(outputDir, name))) {
+      console.log(`[pages] ${name} 本地不存在，跳过`);
+      continue;
+    }
     const result = await putFile(pages, outputDir, name);
     results.push(result);
     console.log(`[pages] ${name} → ${result.created ? "已创建" : "已更新"} commit ${result.commitSha.slice(0, 7)}`);
@@ -97,7 +108,7 @@ export async function publishOutput(config: Config, projectRoot: string): Promis
   }
   const outputDir = path.resolve(projectRoot, config.settings.outputDir);
   try {
-    await publishFiles(outputDir, PUBLISH_FILES, pages);
+    await publishFiles(outputDir, publishList(config), pages);
   } catch (error) {
     console.error(`[pages] 发布失败：${error instanceof Error ? error.message : error}`);
   }

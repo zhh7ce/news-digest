@@ -18,6 +18,7 @@ import {
   type MergeItem,
 } from "./lib/merge.ts";
 import {
+  categoryFeedMeta,
   groupByCategory,
   renderMarkdown,
   renderRss,
@@ -462,8 +463,10 @@ function localTags(now: Date): { dateTag: string; minuteTag: string } {
 }
 
 /**
- * 每次运行写四份：feed-<分钟>.xml / digest-<分钟>.md 留档，
- * feed.xml / digest.md 永远是最新一份，订阅地址只用这两个。
+ * 每次运行写两份留档 + 两份最新 + 每个板块一份：
+ * feed-<分钟>.xml / digest-<分钟>.md 留档，
+ * feed.xml / digest.md 是合并了所有板块的整体订阅，
+ * feed-<板块 id>.xml 每个板块一份，只含该板块的事件。
  */
 function writeOutput(
   groups: EventGroup[],
@@ -493,6 +496,18 @@ function writeOutput(
     [`digest-${minuteTag}.md`, markdown],
     ["digest.md", markdown],
   ];
+
+  // 按 config.categories 逐个出，而不是按 groups 出：本轮没有事件的板块也写空 feed，
+  // 否则上一轮的那份会一直挂在订阅地址上不再更新
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  for (const category of config.categories) {
+    const group = byId.get(category.id) ?? { id: category.id, name: category.name, events: [] };
+    const name = `feed-${category.id}.xml`;
+    files.push([
+      name,
+      renderRss([group], categoryFeedMeta(meta, category, name), config.settings.siteBaseUrl),
+    ]);
+  }
   for (const [name, text] of files) {
     const file = path.join(outputDir, name);
     // 先写同目录临时文件再 rename 覆盖：rename 在同一文件系统上是原子的，

@@ -51,6 +51,22 @@ export function groupByCategory(events: DigestEvent[], categories: Category[]): 
   return groups;
 }
 
+/** 整体 feed 的文件名，板块 feed 的自址从它推出来 */
+const FEED_FILE = "feed.xml";
+
+/** 板块单独成 feed：自址沿用整体 feed 所在目录只换文件名，标题带上板块名 */
+export function categoryFeedMeta(meta: FeedMeta, category: Category, fileName: string): FeedMeta {
+  const dir = meta.selfUrl.endsWith(`/${FEED_FILE}`)
+    ? meta.selfUrl.slice(0, -FEED_FILE.length)
+    : `${meta.selfUrl.replace(/\/+$/, "")}/`;
+  return {
+    title: `${meta.title} · ${category.name}`,
+    description: meta.description,
+    selfUrl: `${dir}${fileName}`,
+    buildDate: meta.buildDate,
+  };
+}
+
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")

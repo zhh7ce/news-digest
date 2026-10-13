@@ -150,20 +150,44 @@ node --input-type=module -e '
 import * as fs from "node:fs";
 const lines = fs.readFileSync("mock-output/pages-upload.jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l));
 const puts = lines.filter((l) => l.method === "PUT");
-if (puts.length !== 2) { console.error(`期望 2 次 PUT，实际 ${puts.length}`); process.exit(1); }
+// 整体 feed.xml + digest.md，再加 mock-feeds.yaml 里 5 个板块各自的 feed-<id>.xml
+const expected = ["digest.md", "feed.xml", "feed-china.xml", "feed-hot.xml", "feed-other.xml", "feed-tech.xml", "feed-world.xml"];
+if (puts.length !== expected.length) { console.error(`期望 ${expected.length} 次 PUT，实际 ${puts.length}`); process.exit(1); }
 const relative = (l) => decodeURIComponent(l.path.split("/contents/")[1].replace(/^static\/news-digest\//, ""));
 const names = puts.map(relative).sort().join(" ");
-if (names !== "digest.md feed.xml") { console.error(`上传清单不对：${names}`); process.exit(1); }
+if (names !== expected.slice().sort().join(" ")) { console.error(`上传清单不对：${names}`); process.exit(1); }
 if (!puts.every((l) => l.path.startsWith("/repos/zhh7ce/zhh7ce.github.io/contents/static/news-digest/"))) {
   console.error("PUT 路径前缀不是 static/news-digest"); process.exit(1);
 }
 for (const p of puts) {
-  const expected = fs.readFileSync(`mock-output/${relative(p)}`);
+  const expectedBytes = fs.readFileSync(`mock-output/${relative(p)}`);
   const uploaded = Buffer.from(JSON.parse(p.body).content, "base64");
-  if (!uploaded.equals(expected)) { console.error(`${relative(p)} 上传内容与本地文件不一致`); process.exit(1); }
+  if (!uploaded.equals(expectedBytes)) { console.error(`${relative(p)} 上传内容与本地文件不一致`); process.exit(1); }
 }
 if (lines.some((l) => l.path.includes("leak-check"))) { console.error("debug 产物被上传了"); process.exit(1); }
-console.log("PUT 恰 2 次、路径前缀与 base64 内容逐字节相符，debug 假文件未上台");
+console.log(`PUT 恰 ${expected.length} 次、路径前缀与 base64 内容逐字节相符，debug 假文件未上台`);
+'
+
+node --input-type=module -e '
+import * as fs from "node:fs";
+const names = { world: "世界新闻", china: "国内新闻", tech: "科技前沿", hot: "热门话题", other: "其他" };
+const count = (text) => [...text.matchAll(/<item>/g)].length;
+const combined = fs.readFileSync("mock-output/feed.xml", "utf8");
+const combinedCount = count(combined);
+if (combinedCount === 0) { console.error("整体 feed.xml 是空的"); process.exit(1); }
+let sum = 0;
+for (const [id, name] of Object.entries(names)) {
+  const text = fs.readFileSync(`mock-output/feed-${id}.xml`, "utf8");
+  sum += count(text);
+  // 自址换成同目录下的本板块文件，guid 前缀跟着它走
+  const self = `https://zhh7ce.github.io/static/news-digest/feed-${id}.xml`;
+  if (!text.includes(`<atom:link href="${self}" rel="self"`)) { console.error(`feed-${id}.xml 的 atom:self 不是 ${self}`); process.exit(1); }
+  const cats = [...text.matchAll(/<category>([^<]*)<\/category>/g)].map((m) => m[1]);
+  if (cats.some((c) => c !== name)) { console.error(`feed-${id}.xml 里混进了别的板块：${[...new Set(cats)].join(",")}`); process.exit(1); }
+  if (count(text) > 0 && !text.includes(`<title>沙箱假源验证 · ${name}</title>`)) { console.error(`feed-${id}.xml 标题没带上板块名`); process.exit(1); }
+}
+if (sum !== combinedCount) { console.error(`各板块条数之和 ${sum} 与整体 ${combinedCount} 不一致`); process.exit(1); }
+console.log(`整体 ${combinedCount} 条与五个板块的条数之和一致，板块 feed 的自址/标题/类别均正确`);
 '
 
 # 409 分支：首次 GET 回旧 sha、首个 PUT 回 409、二次 GET 回新 sha
