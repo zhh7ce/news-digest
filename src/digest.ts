@@ -494,7 +494,11 @@ function writeOutput(
   ];
   for (const [name, text] of files) {
     const file = path.join(outputDir, name);
-    fs.writeFileSync(file, text, "utf8");
+    // 先写同目录临时文件再 rename 覆盖：rename 在同一文件系统上是原子的，
+    // serve 端要么读到旧的完整一份、要么读到新的完整一份，绝不会读到写一半的 feed.xml
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, text, "utf8");
+    fs.renameSync(tmp, file);
     console.log(`[done] ${file}`);
   }
 }

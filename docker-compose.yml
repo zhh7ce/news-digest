@@ -1,0 +1,72 @@
+# news-digest 单容器部署：一个进程同时对外发 HTTP feed + 每天定时自跑流水线。
+#
+#   1. cp .env.example .env，填好 LLM_API_KEY（SERVE_PORT / SCHEDULE_TIME / TZ 也在里面）
+#   2. docker compose up -d --build
+#   3. 订阅地址 http://<NAS_IP>:2345/feed.xml
+#      docker compose logs -f            看每轮起止和每次请求
+#
+# 卷挂在宿主机 ./output 和 ./state，容器里以 uid 1000(node) 运行；
+# 飞牛NAS 上若报权限错，先在宿主机 chown -R 1000:1000 output state。
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    container_name: news-digest
+    # up = 单容器模式（HTTP 服务 + 定时器同进程）；见 scripts/docker-entrypoint.sh
+    command: ["up"]
+    env_file: .env
+    environment:
+      # 运行配置默认值（取自当前 .env，API Key 除外）。environment 优先级高于 env_file，
+      # 所以 .env 只需保留 LLM_API_KEY 一行；要改配置直接改这里。
+      # ── LLM（智谱 GLM）──
+      LLM_API_BASE: "https://open.bigmodel.cn/api/paas/v4"
+      LLM_MODEL: glm-4.7
+      LLM_CONCURRENCY: "1"
+      LLM_RETRIES: "3"
+      LLM_RPM: "60"
+      LLM_THINKING: disabled
+      LLM_ANNOTATE: "0"
+      LLM_SCORE: "1"
+      # ── 排序 / 必留门槛 / 调试转储 ──
+      SORT_BY: sources
+      MIN_SCORE: "7"
+      MIN_SOURCES: "3"
+      DIGEST_DUMP: "1"
+      # ── 对外 HTTP 服务（SERVE_PORT 要和上面 ports 映射保持一致）──
+      SERVE_PORT: "2345"
+      SERVE_HOST: 0.0.0.0
+      # ── 时区：定时点和 output/ 里带分钟的文件名都按它算，不设就是 UTC ──
+      TZ: Asia/Shanghai
+      # ── 抓国外源的代理：指向 NAS（容器里 localhost 是容器自己，填 localhost 抓不到）；
+      #    no_proxy 保留 NAS 自身地址，内网 RSSHub 直连不被代理截走 ──
+      http_proxy: "http://192.168.10.123:7890"
+      https_proxy: "http://192.168.10.123:7890"
+      NODE_USE_ENV_PROXY: "1"
+      no_proxy: "localhost 127.0.0.1 ::1 192.168.10.123"
+    ports:
+      # 宿主机:容器，和下面 environment.SERVE_PORT 保持一致（改端口两处一起改）
+      - "2345:2345"
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: unless-stopped
+    healthcheck:
+      # 用镜像自带的 node 探活：只要 HTTP 有响应就算健康（feed.xml 首轮还没生成时返回 404 也算活着），
+      # 连不上才判失败，配合 restart 策略把卡死的进程拉起来。
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.SERVE_PORT||2345)+'/').then(()=>process.exit(0)).catch(()=>process.exit(1))",
+        ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      # 长跑服务，限制日志体积，别把 NAS 磁盘写满
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

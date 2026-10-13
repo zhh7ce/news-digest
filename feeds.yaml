@@ -85,7 +85,7 @@ llm:
   # 每分钟最多发多少个 AI 请求，0 表示不限。免费额度按分钟限速时填这个，
   # 程序会在窗口满了之后等最早那个请求滑出去再发；环境变量 LLM_RPM 优先。
   rpm: 0
-  # 逐条标注开关。0 = 完全不发这类请求，标题直接用原文、分类用该源在 sources 里声明的 category；
+  # 逐条标注开关。0 = 完全不发这类请求，标题直接用原文、分类用该源在 sources/sources.yaml 里声明的 category；
   # 归并和打分仍照常发。非 0 = 每条（首次见到时）请求一次中文标题 + 类别。环境变量 LLM_ANNOTATE 优先。
   annotate: 1
   # 逐事件打分开关。0 = 完全不发这类请求，所有事件记 0 分，排序退化成独立来源数 → 事件最新报道时间（缓存里的旧分数也不用）；
@@ -163,110 +163,5 @@ prompts:
     只返回 JSON，格式：
     {"score":7.5}
 
-# 源清单：与 digest/feeds.yaml 保持一致（2026-10-12 从那边复制过来）。
-# category 只是 AI 没给出归类时的兜底归属，正常情况由逐条调用决定。
-# 自建 RSSHub（192.168.10.123:1200）的 URL 统一带 ?limit=30：让实例只渲染要用的条数，
-# 否则它默认渲染 100 条逐篇抓原文，冷缓存时一次响应会超时。
-sources:
-  # ── 国内 ──
-  - id: people-politics
-    name: 人民网时政
-    url: http://192.168.10.123:1200/people/politics?limit=30
-    category: china
-  - id: xinhua-whxw
-    name: 新华社最新播报
-    url: http://192.168.10.123:1200/news/whxw?limit=30
-    category: china
-  - id: chinanews-china
-    name: 中新网国内
-    url: http://www.chinanews.com.cn/rss/china.xml
-    category: china
-  - id: jiemian
-    name: 界面新闻
-    url: https://a.jiemian.com/index.php?m=article&a=rss
-    category: china
-  - id: people-finance
-    name: 人民网财经
-    url: http://192.168.10.123:1200/people/finance?limit=30
-    category: china
-  - id: caixin
-    name: 财新网
-    url: http://192.168.10.123:1200/caixin/latest?limit=30
-    category: china
-  - id: chinanews-scroll
-    name: 中新网滚动
-    url: http://www.chinanews.com.cn/rss/scroll-news.xml
-    category: china
-  # 财联社电报（/cls/telegraph）路由本身可用，但每条的 <link> 是空的、guid 是标题文本，
-  # 拿不到原文链接，也不适合作为去重键，所以不接入。
-  # ── 世界 ──
-  - id: people-world
-    name: 人民网国际
-    url: http://192.168.10.123:1200/people/world?limit=30
-    category: world
-  - id: chinanews-world
-    name: 中新网国际
-    url: http://www.chinanews.com.cn/rss/world.xml
-    category: world
-  - id: cankao
-    name: 参考消息
-    url: http://192.168.10.123:1200/cankaoxiaoxi?limit=30
-    category: world
-  - id: sina-rollnews
-    name: 新浪新闻滚动
-    url: http://192.168.10.123:1200/sina/rollnews?limit=30
-    category: world
-  # ── 科技 ──
-  - id: ithome
-    name: IT之家
-    url: https://www.ithome.com/rss/
-    category: tech
-  - id: qbitai
-    name: 量子位
-    url: https://www.qbitai.com/feed
-    category: tech
-  - id: leiphone
-    name: 雷锋网
-    url: https://www.leiphone.com/feed
-    category: tech
-  - id: infoq-cn
-    name: InfoQ 中文
-    url: https://www.infoq.cn/feed
-    category: tech
-  - id: geekpark
-    name: 极客公园
-    url: https://www.geekpark.net/rss
-    category: tech
-  - id: ifanr
-    name: 爱范儿
-    url: https://ifanr.com/feed
-    category: tech
-  - id: huxiu
-    name: 虎嗅
-    url: http://192.168.10.123:1200/huxiu/article?limit=30
-    category: tech
-  - id: sspai
-    name: 少数派
-    url: https://sspai.com/feed
-    category: tech
-  - id: hn-frontpage
-    name: Hacker News 首页
-    url: https://hnrss.org/frontpage
-    category: tech
-  - id: hn-best
-    name: Hacker News Best
-    url: https://hnrss.org/best
-    category: tech
-  # ── 热门话题 ──
-  - id: zhihu-hot
-    name: 知乎热榜
-    url: http://192.168.10.123:1200/zhihu/hot?limit=30
-    category: hot
-  - id: kr36-hotlist
-    name: 36Kr 热榜
-    url: http://192.168.10.123:1200/36kr/hot-list?limit=30
-    category: hot
-  - id: kr36-newsflashes
-    name: 36氪快讯
-    url: http://192.168.10.123:1200/36kr/newsflashes?limit=30
-    category: hot
+# 订阅源清单在 sources/sources.yaml（与本文件同目录的 sources/ 下），那边的声明顺序即源优先级：
+# 代表条目选取和事件内成员排序都按它来。

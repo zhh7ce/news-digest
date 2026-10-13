@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY feeds.yaml ./
+COPY sources ./sources
 COPY src ./src
 COPY scripts/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
@@ -18,5 +19,6 @@ RUN mkdir -p output state && chown -R node:node /app
 USER node
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-# digest = 跑一轮流水线后退出；serve = 起 HTTP 订阅服务
-CMD ["digest"]
+# up = 单容器常驻：同进程发 HTTP feed + 每天定时自跑（默认）；
+# 也可传 digest / serve / loop 只跑其中一件事
+CMD ["up"]

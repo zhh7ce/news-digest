@@ -105,20 +105,3 @@ prompts:
     只返回 JSON，格式：
     {"score":7.5}
 
-# 源清单：与 digest/feeds.yaml 保持一致（2026-10-12 从那边复制过来）。
-# category 只是 AI 没给出归类时的兜底归属，正常情况由逐条调用决定。
-# 自建 RSSHub（192.168.10.123:1200）的 URL 统一带 ?limit=30：让实例只渲染要用的条数，
-# 否则它默认渲染 100 条逐篇抓原文，冷缓存时一次响应会超时。
-sources:
-  - id: s1
-    name: 甲源
-    url: http://127.0.0.1:8787/feeds/s1.xml
-    category: china
-  - id: s2
-    name: 乙源
-    url: http://127.0.0.1:8787/feeds/s2.xml
-    category: world
-  - id: s3
-    name: 丙源
-    url: http://127.0.0.1:8787/feeds/s3.xml
-    category: tech

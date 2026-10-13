@@ -44,9 +44,10 @@ run() {
 }
 
 rm -rf mock-output mock-state
-mkdir -p mock-output
+mkdir -p mock-output/sources
 # 第三轮的源列表只把 URL 换成 /feeds/r2/...，假源里多出两条"这一轮刚出现"的报道
 sed 's|/feeds/|/feeds/r2/|' tests/mock-feeds.yaml > mock-output/feeds-round3.yaml
+sed 's|/feeds/|/feeds/r2/|' tests/sources/sources.yaml > mock-output/sources/sources.yaml
 
 start_mock 1
 

@@ -1,0 +1,14 @@
+# 沙箱自测用的假源清单，与 tests/mock-feeds.yaml 配套（URL 由 tests/mock-llm.mjs 提供）。按配置目录约定放在 sources/ 下。
+sources:
+  - id: s1
+    name: 甲源
+    url: http://127.0.0.1:8787/feeds/s1.xml
+    category: china
+  - id: s2
+    name: 乙源
+    url: http://127.0.0.1:8787/feeds/s2.xml
+    category: world
+  - id: s3
+    name: 丙源
+    url: http://127.0.0.1:8787/feeds/s3.xml
+    category: tech

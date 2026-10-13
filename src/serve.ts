@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "./lib/config.ts";
 
 const DEFAULT_PORT = 8080;
@@ -131,7 +132,7 @@ function markdownPage(md: string, fallbackTitle: string): string {
   ].join("\n");
 }
 
-const server = http.createServer((req, res) => {
+function requestHandler(req: http.IncomingMessage, res: http.ServerResponse): void {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, { Allow: "GET, HEAD", "Content-Type": "text/plain; charset=utf-8" });
     res.end("只支持 GET\n");
@@ -157,17 +158,25 @@ const server = http.createServer((req, res) => {
     "Cache-Control": "no-cache",
   });
   res.end(req.method === "HEAD" ? undefined : body);
-});
+}
 
-server.listen(port, host, () => {
-  console.log(`[serve] 目录 ${outputDir}`);
-  console.log(`[serve] feed.xml / digest.md 始终是最新一份，带分钟的只是留档`);
-  console.log(`[serve] 浏览器打开 digest.md 会当场转成 HTML，curl 和阅读器拿到的是原始 MD`);
-  if (host === "0.0.0.0") {
-    for (const address of lanAddresses()) {
-      console.log(`[serve] 订阅地址 http://${address}:${port}/feed.xml`);
+/** 起只读 HTTP 服务；被 main.ts 组合调用，也可直接 node src/serve.ts 单独跑 */
+export function startServe(): http.Server {
+  const server = http.createServer(requestHandler);
+  server.listen(port, host, () => {
+    console.log(`[serve] 目录 ${outputDir}`);
+    console.log(`[serve] feed.xml / digest.md 始终是最新一份，带分钟的只是留档`);
+    console.log(`[serve] 浏览器打开 digest.md 会当场转成 HTML，curl 和阅读器拿到的是原始 MD`);
+    if (host === "0.0.0.0") {
+      for (const address of lanAddresses()) {
+        console.log(`[serve] 订阅地址 http://${address}:${port}/feed.xml`);
+      }
+    } else {
+      console.log(`[serve] 订阅地址 http://${host}:${port}/feed.xml`);
     }
-  } else {
-    console.log(`[serve] 订阅地址 http://${host}:${port}/feed.xml`);
-  }
-});
+  });
+  return server;
+}
+
+// 直接 node src/serve.ts 时才自启；被 main.ts import 时只导出函数、不抢跑
+if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) startServe();

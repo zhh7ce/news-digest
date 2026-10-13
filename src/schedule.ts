@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * 容器常驻定时器：每天到点跑一轮流水线，省掉在 NAS 上配计划任务。
@@ -90,7 +91,7 @@ function stop(signal: string): void {
   wake?.();
 }
 
-async function main(): Promise<void> {
+export async function startScheduler(): Promise<void> {
   const args = process.argv.slice(2);
   const configured = parseTime(process.env.SCHEDULE_TIME);
   if (!configured && process.env.SCHEDULE_TIME) {
@@ -115,4 +116,5 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => stop(signal));
 }
 
-await main();
+// 直接 node src/schedule.ts 时才自跑；被 main.ts import 时只导出函数、由它来 await
+if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) await startScheduler();

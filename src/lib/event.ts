@@ -1,6 +1,6 @@
 import { publishedTimeMs, type Article } from "./fetch.ts";
 
-/** feeds.yaml 里 sources: 的声明顺序，越小越优先；配置外的源排在最后 */
+/** sources/sources.yaml 里 sources: 的声明顺序，越小越优先；配置外的源排在最后 */
 export function rankOf(sourceOrder: Map<string, number>, article: Article): number {
   return sourceOrder.get(article.sourceId) ?? Number.POSITIVE_INFINITY;
 }

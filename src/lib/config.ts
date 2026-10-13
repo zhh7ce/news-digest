@@ -106,6 +106,7 @@ const REQUIRED_SETTINGS = [
 export function loadConfig(projectRoot: string): Config {
   const file = process.env.FEEDS_CONFIG ?? path.join(projectRoot, "feeds.yaml");
   const raw = parseYaml(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+  const sourcesFile = path.join(path.dirname(file), "sources", "sources.yaml");
 
   const settings = { ...requiredSection(raw, "settings") } as Record<string, unknown>;
   for (const key of REQUIRED_SETTINGS) {
@@ -136,16 +137,12 @@ export function loadConfig(projectRoot: string): Config {
   const minScore = readNonNegativeNumber(process.env.MIN_SCORE, settings.minScore as number | undefined, 0);
   const minSources = readNonNegativeInt(process.env.MIN_SOURCES, settings.minSources as number | undefined, 0);
 
-  const sources = (raw.sources as FeedSource[] | undefined) ?? [];
-  if (sources.length === 0) {
-    throw new Error("feeds.yaml 未配置任何订阅源");
-  }
-
+  const sources = loadSources(sourcesFile);
   const categories = loadCategories(raw.categories);
   const categoryIds = new Set(categories.map((c) => c.id));
   for (const source of sources) {
     if (source.category && !categoryIds.has(source.category)) {
-      throw new Error(`feeds.yaml 源 ${source.id} 的 category "${source.category}" 不在 categories 列表中`);
+      throw new Error(`sources/sources.yaml 源 ${source.id} 的 category "${source.category}" 不在 categories 列表中`);
     }
   }
 
@@ -169,6 +166,18 @@ export function loadConfig(projectRoot: string): Config {
     minScore,
     minSources,
   };
+}
+
+function loadSources(file: string): FeedSource[] {
+  if (!fs.existsSync(file)) {
+    throw new Error(`找不到订阅源文件 ${file}`);
+  }
+  const raw = parseYaml(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+  const sources = (raw.sources as FeedSource[] | undefined) ?? [];
+  if (sources.length === 0) {
+    throw new Error(`${file} 未配置任何订阅源`);
+  }
+  return sources;
 }
 
 function loadCategories(value: unknown): Category[] {
