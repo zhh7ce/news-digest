@@ -19,6 +19,7 @@ RUN mkdir -p output state && chown -R node:node /app
 USER node
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-# up = 单容器常驻：同进程发 HTTP feed + 每天定时自跑（默认）；
-# 也可传 digest / serve / loop 只跑其中一件事
+# 第一个参数选模式：up = 同进程发 HTTP feed + 每天定时自跑（默认）；
+# digest = 跑一轮就退出，loop = 只跑定时器（docker-compose.yml 用的就是这个），
+# serve = 只发 HTTP，publish = 只把 output/ 里的产物推上 GitHub Pages
 CMD ["up"]
