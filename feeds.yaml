@@ -20,7 +20,9 @@ settings:
   # feed 元信息
   feedTitle: "每日要闻精选"
   feedDescription: "多源报道优先的每日新闻摘要"
-  # 手机订阅时 feed 内条目链接的站点前缀（可留空，留空则用原始链接）
+  # 条目链接的 /go/ 跳转前缀（可留空，留空则用原始链接）。
+  # feed 自址现在优先取 env 的 FEED_URL，这个值只在 FEED_URL 没配时用来拼 /feed.xml；
+  # 两者都留空会启动报错——写 file:// 会被鸿蒙的 http 模块以 2300003 拒掉。
   siteBaseUrl: ""
   # 一次归并请求送多少个条目（按类别切批，批内条目数不超过这个值）
   mergeBatchSize: 100
