@@ -1,0 +1,20 @@
+# 覆盖 base.yml：定时器 + 对外发 HTTP 同进程。局域网里能直接订 http://<NAS_IP>:<SERVE_PORT>/feed.xml。
+# 用法见 base.yml 顶部。
+
+services:
+  news-digest:
+    container_name: news-digest-up
+    command: ["up"]
+    healthcheck:
+      # 只要 HTTP 有响应就算健康（第一轮还没生成 feed.xml 时返回 404 也算活着），连不上才判失败
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.SERVE_PORT||2345)+'/').then(()=>process.exit(0)).catch(()=>process.exit(1))",
+        ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

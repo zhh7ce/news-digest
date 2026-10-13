@@ -1,0 +1,11 @@
+# 覆盖 base.yml：只跑一轮流水线就跑完（一次性任务，用 docker compose run --rm news-digest 起）。
+# base.yml 里是 restart: unless-stopped，一次性任务必须改回 no，否则跑完会被一直拉起重跑。
+# 用法见 base.yml 顶部。
+
+services:
+  news-digest:
+    container_name: news-digest-digest
+    command: ["digest"]
+    restart: "no"
+    healthcheck:
+      disable: true

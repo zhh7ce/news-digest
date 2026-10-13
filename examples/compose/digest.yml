@@ -1,0 +1,29 @@
+# news-digest 部署模板之一：手动跑一轮流水线（入口 digest），跑完就退出。
+# 给外部计划任务用，或者想立刻看这一轮的效果而不等到 SCHEDULE_TIME。
+# 流水线末尾会顺带把 feed.xml / digest.md 推到 Pages（配了 PAGES_* 才推）。
+#
+# 用法（这是一次性任务，用 run 不用 up -d）：
+#   cp examples/compose/digest.yml ./docker-compose.yml
+#   docker compose run --rm news-digest
+#   docker compose run --rm news-digest digest --dump     # 顺带把原始抓取和每次 AI 调用写到 output/debug/
+#   run 后面再跟参数会整体替换 command，所以要写全模式名，别只跟 --dump
+#
+# 想让它每天自己跑就别用这份，改 loop.yml；也可以 up -d 这条并配 SCHEDULE_TIME，但那是重复计时。
+
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    command: ["digest"]
+    env_file: .env
+    # 抓国外源要能碰到宿主的代理；桥接网络下删掉这行并把 .env 里的代理填成 NAS 局域网地址
+    network_mode: host
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

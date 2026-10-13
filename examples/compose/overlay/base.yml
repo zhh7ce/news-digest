@@ -1,0 +1,29 @@
+# 覆盖式写法（和上一级目录里那几份自带全部字段的模板二选一）：
+# 公共字段只写在这份 base 里，每种模式一个只写差异的薄文件，compose 自动合并或两个 -f 手动合并。
+#
+# 用法 A（不用 -f）：把 base 和想要的覆盖文件一起复制到项目根，按 compose 的命名约定改名，
+#   compose 会读同目录的 docker-compose.yml + docker-compose.override.yml 并自动合并：
+#     cp examples/compose/overlay/base.yml ./docker-compose.yml
+#     cp examples/compose/overlay/loop.override.yml ./docker-compose.override.yml
+#     docker compose up -d --build
+# 用法 B（带 -f，两个文件留在原地也行，但相对路径按第一个 -f 所在目录算，所以要在项目根这样跑）：
+#     docker compose -f examples/compose/overlay/base.yml -f examples/compose/overlay/up.override.yml up -d
+#     （-f 会改变项目目录，output/state 挂进来的位置会跟着变，介意的话加 --project-directory .）
+#
+# 下面这些相对路径是按"文件在项目根"写的。
+
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    env_file: .env
+    network_mode: host
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,32 @@
+# news-digest 部署模板之一：只跑定时器（入口 loop），不对外发 HTTP。
+# 产物只推 GitHub Pages，订阅地址用 https://<用户名>.github.io/static/news-digest/feed.xml。
+# 项目根的 docker-compose.yml 用的就是这一份配置。
+#
+# 用法：
+#   cp examples/compose/loop.yml ./docker-compose.yml
+#   docker compose up -d --build
+#   docker compose logs -f          看每轮起止和 [pages] 推送结果
+#
+# 需要 .env 里有：SCHEDULE_TIME、TZ、LLM_*，走 Pages 发布再加 PAGES_REPO/PAGES_DIR/PAGES_TOKEN/FEED_URL。
+# SERVE_PORT、SERVE_HOST 在这个模式下不起作用，留着无害。
+
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    container_name: news-digest-loop
+    command: ["loop"]
+    env_file: .env
+    # 不监听任何端口；用 host 网络只是为了让 .env 里的 127.0.0.1:7890 命中 NAS 自己的代理。
+    # 换桥接网络就把这行删掉，并把 .env 里的代理填成 NAS 的局域网地址。
+    network_mode: host
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: unless-stopped
+    # 这里没有 healthcheck：loop 模式不起 HTTP，探 SERVE_PORT 会永远 unhealthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

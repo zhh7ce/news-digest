@@ -1,0 +1,50 @@
+# news-digest 部署模板之一：定时器 + 对外 HTTP 服务同进程（入口 up）。
+#
+# 这是最省事的常驻形态：每天 SCHEDULE_TIME 自己跑一轮流水线、推上 Pages，
+# 同时把 output/ 里的产物发成局域网 HTTP feed，手机上可以直接订 http://<NAS_IP>:<SERVE_PORT>/feed.xml。
+#
+# 用法：复制到项目根改名 docker-compose.yml（build: . 和 ./output 这些相对路径是按本文件所在目录算的）
+#   cp examples/compose/up.yml ./docker-compose.yml
+#   docker compose up -d --build
+#   docker compose logs -f
+#
+# 需要 .env 里有：SCHEDULE_TIME、TZ、SERVE_PORT、SERVE_HOST、LLM_*，走 Pages 发布再加 PAGES_*。
+
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    container_name: news-digest-up
+    command: ["up"]
+    env_file: .env
+    # host 网络：容器里的 127.0.0.1:7890 就是 NAS 自己的代理，SERVE_PORT 由 NAS 直接监听
+    network_mode: host
+    # 想在局域网地址上访问，SERVE_HOST 保持 0.0.0.0；host 网络下 ports 写了也无效
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: unless-stopped
+    healthcheck:
+      # 只要 HTTP 有响应就算健康（第一轮还没生成 feed.xml 时返回 404 也算活着），连不上才判失败
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.SERVE_PORT||2345)+'/').then(()=>process.exit(0)).catch(()=>process.exit(1))",
+        ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# 改用桥接网络的话：删掉 network_mode 这一行，加下面两段，
+# 并把 .env 里的 http_proxy / https_proxy 换成 NAS 的局域网地址（容器里的 localhost 不是宿主）。
+#     ports:
+#       - "2345:2345"   # 宿主机:容器，和 .env 的 SERVE_PORT 保持一致
+#   桥接模式下 healthcheck 探的 127.0.0.1 是容器自己，仍然有效。

@@ -1,0 +1,41 @@
+# news-digest 部署模板之一：只对外发 HTTP（入口 serve），容器自己不跑流水线。
+# 适合定时逻辑放在宿主那边的场景：飞牛计划任务 / crontab 每天 docker compose run --rm news-digest-digest，
+# 这个容器只负责把 output/ 里的最新一份发出去。
+#
+# 用法：
+#   cp examples/compose/serve.yml ./docker-compose.yml
+#   docker compose up -d --build
+#   订阅地址 http://<NAS_IP>:<SERVE_PORT>/feed.xml（digest.md 同目录，浏览器打开会转成 HTML）
+#
+# output/ 必须是和跑流水线的那个容器/宿主同一个目录，否则这里发出去的一直是旧文件。
+
+services:
+  news-digest:
+    build: .
+    image: news-digest:latest
+    container_name: news-digest-serve
+    command: ["serve"]
+    env_file: .env
+    network_mode: host
+    # host 网络下不用写 ports，SERVE_PORT 由 NAS 直接监听；改桥接就删 network_mode 并加 ports: - "<SERVE_PORT>:<SERVE_PORT>"
+    volumes:
+      - ./output:/app/output
+      - ./state:/app/state
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.SERVE_PORT||2345)+'/').then(()=>process.exit(0)).catch(()=>process.exit(1))",
+        ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

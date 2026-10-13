@@ -1,0 +1,8 @@
+# 覆盖 base.yml：只跑定时器，不对外发 HTTP。订阅地址是 Pages 上的 https。
+# base.yml 里没有 healthcheck，这一份也不加（loop 模式不起 HTTP，探 SERVE_PORT 会永远 unhealthy）。
+# 用法见 base.yml 顶部。
+
+services:
+  news-digest:
+    container_name: news-digest-loop
+    command: ["loop"]

@@ -1,0 +1,10 @@
+# 覆盖 base.yml：只把 output/ 里现有的 feed.xml 和 digest.md 推上 Pages，不跑流水线。
+# 一次性任务，用 docker compose run --rm news-digest 起，不要 up -d。
+# publish 不写 state/，所以这里把 base 的 state 挂载留着也无妨（不改就是全挂）。
+# 用法见 base.yml 顶部。
+
+services:
+  news-digest:
+    container_name: news-digest-publish
+    command: ["publish"]
+    restart: "no"
