@@ -239,6 +239,12 @@ createServer((req, res) => {
     return res.end(feedXml(feed, feedMatch[1] ? 2 : 1));
   }
 
+  // 探活路由：test.sh 用它确认端口上的 mock 是不是本批起的
+  if (url.pathname === "/health") {
+    res.writeHead(200);
+    return res.end("ok");
+  }
+
   if (req.method !== "POST" || !url.pathname.endsWith("/chat/completions")) {
     res.writeHead(404);
     return res.end("not found");

@@ -7,7 +7,8 @@ settings:
   stateDir: ./mock-state
   feedTitle: "沙箱假源验证"
   feedDescription: "mock 验证用，不写真实 output/state"
-  siteBaseUrl: ""
+  # 自址前缀：feedUrl 未配时 channel 用它拼 /feed.xml，只认 http(s)（配 file:// 或留空会启动报错）
+  siteBaseUrl: "http://127.0.0.1:8080"
   mergeBatchSize: 100
   maxItemsPerCategory: 3
   summaryMaxChars: 400

@@ -2,6 +2,7 @@
 # 镜像入口：第一个参数决定干什么，其余参数转给对应的脚本
 # up = 单容器常驻：同一进程里既发 HTTP feed 又跑每天定时器（推荐，compose 用这个）
 # digest = 跑一轮流水线后退出，serve = 只起 HTTP 订阅服务，
+# publish = 只把 output/ 里的 feed.xml 与 digest.md 推上 GitHub Pages（配了 PAGES_* 才生效），
 # loop = 只跑常驻定时器，每天 SCHEDULE_TIME（默认 02:00）自己跑一轮，其它 = 当作命令直接执行
 set -e
 
@@ -15,6 +16,7 @@ case "$mode" in
   up) exec node --env-file-if-exists=.env src/main.ts "$@" ;;
   digest) exec node --env-file-if-exists=.env src/digest.ts "$@" ;;
   serve) exec node --env-file-if-exists=.env src/serve.ts ;;
+  publish) exec node --env-file-if-exists=.env src/publish.ts ;;
   loop) exec node --env-file-if-exists=.env src/schedule.ts "$@" ;;
   *) exec "$mode" "$@" ;;
 esac

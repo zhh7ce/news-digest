@@ -4,6 +4,7 @@ import { categoryIds, categoryListText, loadConfig, type Category, type Config, 
 import { rankOf, sourceCount, voteCategory } from "./lib/event.ts";
 import { fetchAllSources, publishedTimeMs, type Article } from "./lib/fetch.ts";
 import { extractJson, isContentFiltered, LlmClient } from "./lib/llm.ts";
+import { publishOutput } from "./lib/pages.ts";
 import {
   bucketAssignments,
   buildAnchorRows,
@@ -475,7 +476,7 @@ function writeOutput(
   const meta: FeedMeta = {
     title: config.settings.feedTitle,
     description: config.settings.feedDescription,
-    selfUrl: `${config.settings.siteBaseUrl || `file://${outputDir}`}/feed.xml`,
+    selfUrl: config.feedUrl ?? `${config.settings.siteBaseUrl.replace(/\/+$/, "")}/feed.xml`,
     buildDate: new Date(),
   };
 
@@ -597,6 +598,7 @@ async function main(): Promise<void> {
       eventCount: deduped.length,
       maxItemsPerCategory: maxPerCategory,
     });
+    await publishOutput(config, projectRoot);
     return;
   }
 
@@ -800,6 +802,9 @@ async function main(): Promise<void> {
     eventCount: events.length,
     maxItemsPerCategory: maxPerCategory,
   });
+
+  // 发布失败只在 publishOutput 里记日志，不抛错——一次上传失败不该让整个进程的非零退出码吓到定时器
+  await publishOutput(config, projectRoot);
 
   store.events = {};
   for (const record of workspace.list()) store.events[record.id] = record;

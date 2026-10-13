@@ -37,6 +37,12 @@ services:
       SERVE_HOST: 0.0.0.0
       # ── 时区：定时点和 output/ 里带分钟的文件名都按它算，不设就是 UTC ──
       TZ: Asia/Shanghai
+      # ── GitHub Pages 发布：三者齐才发布，PAGES_TOKEN 只从宿主 .env 来（这里留空即不发布）──
+      PAGES_REPO: zhh7ce/zhh7ce.github.io
+      PAGES_BRANCH: main
+      PAGES_DIR: static/news-digest
+      PAGES_TOKEN: ""
+      FEED_URL: https://zhh7ce.github.io/static/news-digest/feed.xml
       # ── 抓国外源的代理：指向 NAS（容器里 localhost 是容器自己，填 localhost 抓不到）；
       #    no_proxy 保留 NAS 自身地址，内网 RSSHub 直连不被代理截走 ──
       http_proxy: "http://192.168.10.123:7890"

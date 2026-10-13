@@ -66,6 +66,14 @@ export interface LlmSettings {
   score?: number;
 }
 
+export interface PagesTarget {
+  apiBase: string;
+  repo: string;
+  branch: string;
+  dir: string;
+  token: string;
+}
+
 export interface Config {
   settings: Settings;
   profile: string;
@@ -91,6 +99,10 @@ export interface Config {
   minScore: number;
   /** 必留独立来源数门槛，0 = 该维度不生效 */
   minSources: number;
+  /** PAGES_REPO / PAGES_DIR / PAGES_TOKEN 三者齐全才给，缺一个就是不发布 */
+  pages?: PagesTarget;
+  /** feed 自址（FEED_URL），channel 的 <link> / <atom:link> 与 guid 前缀都用它 */
+  feedUrl?: string;
 }
 
 const REQUIRED_SETTINGS = [
@@ -136,6 +148,15 @@ export function loadConfig(projectRoot: string): Config {
   const sortBy = readSortBy(process.env.SORT_BY, settings.sortBy as SortBy | undefined);
   const minScore = readNonNegativeNumber(process.env.MIN_SCORE, settings.minScore as number | undefined, 0);
   const minSources = readNonNegativeInt(process.env.MIN_SOURCES, settings.minSources as number | undefined, 0);
+  const feedUrl = readFeedUrl(process.env.FEED_URL);
+  settings.siteBaseUrl = String(settings.siteBaseUrl ?? "");
+  if (!feedUrl && !settings.siteBaseUrl) {
+    throw new Error(
+      "FEED_URL 与 settings.siteBaseUrl 至少要有一个——RSS 2.0 的 channel <link> 是必填项，" +
+        "写 file:// 会被鸿蒙的 http 模块以 2300003 拒掉",
+    );
+  }
+  const pages = readPages();
 
   const sources = loadSources(sourcesFile);
   const categories = loadCategories(raw.categories);
@@ -165,6 +186,8 @@ export function loadConfig(projectRoot: string): Config {
     sortBy,
     minScore,
     minSources,
+    pages,
+    feedUrl,
   };
 }
 
@@ -248,6 +271,45 @@ const SORT_VALUES: readonly string[] = ["sources", "score"];
 function readSortBy(envValue: string | undefined, fallback: SortBy | undefined): SortBy {
   const value = envValue ? envValue.trim().toLowerCase() : fallback;
   return SORT_VALUES.includes(value ?? "") ? (value as SortBy) : "sources";
+}
+
+const OWNER_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/** FEED_URL 只接受 http(s)；留空返回 undefined，写了但不合法直接抛错 */
+function readFeedUrl(raw: string | undefined): string | undefined {
+  const value = (raw ?? "").trim();
+  if (!value) return undefined;
+  if (!/^https?:\/\//.test(value)) {
+    throw new Error(`FEED_URL 必须以 http:// 或 https:// 开头（收到 "${value}"）`);
+  }
+  return value;
+}
+
+/**
+ * PAGES_REPO / PAGES_DIR / PAGES_TOKEN 三者齐才发布，缺任何一个返回 undefined。
+ * 齐了以后字段不合法（发错仓库/目录级别的风险）直接抛错，不静默。
+ */
+function readPages(): PagesTarget | undefined {
+  const repo = (process.env.PAGES_REPO ?? "").trim();
+  const dir = (process.env.PAGES_DIR ?? "").trim();
+  const token = (process.env.PAGES_TOKEN ?? "").trim();
+  const configured = Boolean(repo && dir && token);
+  console.log(`[pages] Contents 令牌${token ? "已配置" : "未配置"}`);
+  if (!configured) return undefined;
+
+  if (!OWNER_REPO.test(repo)) {
+    throw new Error(`PAGES_REPO 必须形如 owner/name（收到 "${repo}"）`);
+  }
+  const cleanDir = dir.replace(/^\/+|\/+$/g, "");
+  if (!cleanDir) {
+    throw new Error(`PAGES_DIR 去掉首尾 / 后为空（收到 "${dir}"）`);
+  }
+  const apiBase = (process.env.PAGES_API_BASE ?? "https://api.github.com").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(apiBase)) {
+    throw new Error(`PAGES_API_BASE 必须以 http:// 或 https:// 开头（收到 "${apiBase}"）`);
+  }
+  const branch = (process.env.PAGES_BRANCH ?? "main").trim() || "main";
+  return { apiBase, repo, branch, dir: cleanDir, token };
 }
 
 function requiredSection(raw: Record<string, unknown>, key: string): Record<string, unknown> {
