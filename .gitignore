@@ -4,3 +4,5 @@ state/
 .env
 mock-output/
 mock-state/
+# docker save 出来的镜像包，别进版本库
+news-digest.tar
